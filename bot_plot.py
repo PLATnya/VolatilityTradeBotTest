@@ -1,4 +1,4 @@
-from pickle import GLOBAL
+
 import matplotlib.pyplot as plt
 import plotext as pltcli
 import numpy as np
