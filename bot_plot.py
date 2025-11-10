@@ -32,6 +32,8 @@ class BacktestInfo:
         self.price_array = []
         self.upper_trade_treshold = 0
         self.lower_trade_treshold = 0
+        self.long_term_window = 0
+        self.short_term_window = 0
         self.volatility_ratio_array = []
 
     @staticmethod
@@ -41,6 +43,8 @@ class BacktestInfo:
         obj.price_array = data.get("price_array", [])
         obj.upper_trade_treshold = data.get("upper_trade_treshold", 0)
         obj.lower_trade_treshold = data.get("lower_trade_treshold", 0)
+        obj.long_term_window = data.get("long_term_window", 0)
+        obj.short_term_window = data.get("short_term_window", 0)
         obj.volatility_ratio_array = data.get("volatility_ratio_array", [])
         return obj
 
@@ -54,14 +58,14 @@ def plot_backtest_info_cli(backtest_infos):
 
     pltcli.clf()
     pltcli.subplots(2, n)
-
+    #pltcli.title(f"Long term window: {backtest_infos[0].long_term_window}, Short term window: {backtest_infos[0].short_term_window}")
     colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'brown', 'pink', 'gray', 'black']
     colors = colors[:n]
-    for idx, (backtest_info, color) in enumerate(zip(backtest_infos, colors)):
+    for idx, backtest_info in enumerate(backtest_infos):
         # Equity Curve - each in its own column
         ax_eq = pltcli.subplot(1, idx + 1)
         ax_eq.plot(backtest_info.equity_array, marker = "braille", color="red")
-        ax_eq.title(f"Equity Curve {idx+1}")
+        ax_eq.title(f"Equity long {backtest_info.long_term_window} short {backtest_info.short_term_window} upper {backtest_info.upper_trade_treshold} lower {backtest_info.lower_trade_treshold}")
 
         # Volatility Ratio - each in its own column
         ax_vr = pltcli.subplot(2, idx + 1)
@@ -84,7 +88,7 @@ def plot_backtest_info_cli(backtest_infos):
         else:
             mapped_close = close_prices_norm + vrr_min
 
-        ax_vr.plot(mapped_close, marker = "braille", color='yellow', label="Close Price (mapped)")
+        ax_vr.plot(mapped_close, marker = "braille", color='red', label="Close Price (mapped)")
 
         # Add reference lines
         print(f'upper_trade_treshold ({backtest_info.upper_trade_treshold})')
@@ -114,7 +118,7 @@ def plot_backtest_info_ui(backtest_infos):
         # Equity Curve - each in its own column
         ax_eq = axs[0, idx]
         ax_eq.plot(backtest_info.equity_array, color=color)
-        ax_eq.set_title(f"Equity Curve {idx+1}")
+        ax_eq.set_title(f"Equity Curve {idx+1} (long_term_window: {backtest_info.long_term_window}, short_term_window: {backtest_info.short_term_window})")
 
         # Volatility Ratio - each in its own column
         ax_vr = axs[1, idx]

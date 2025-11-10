@@ -156,6 +156,8 @@ def hollow_backtest_period(in_data, long_term_window: int, short_term_window: in
 
 
     backtest_info = BacktestInfo()
+    backtest_info.long_term_window = long_term_window
+    backtest_info.short_term_window = short_term_window
     backtest_info.equity_array = some_array
     backtest_info.price_array = in_data['close'].iloc[(long_term_window + 1):].values
     backtest_info.upper_trade_treshold = upper_trade_treshold
@@ -253,6 +255,8 @@ def optimize_parameters():
                 "upper_trade_treshold": backtest_info.upper_trade_treshold,
                 "lower_trade_treshold": backtest_info.lower_trade_treshold,
                 "volatility_ratio_array": list(backtest_info.volatility_ratio_array),
+                "long_term_window": backtest_info.long_term_window,
+                "short_term_window": backtest_info.short_term_window,
             } for backtest_info in backtest_infos[trial.number]]
         }
 
