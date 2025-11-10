@@ -9,7 +9,7 @@ import time
 import optuna
 import json
 from datetime import datetime, timedelta, timezone
-from bot_plot import plot_backtest_info
+from bot_plot import plot_backtest_info, BacktestInfo
 
 load_dotenv()
 
@@ -115,24 +115,6 @@ def calculate_volatility_ratio(in_data, long_term_window: int, short_term_window
     return short_term_vol / long_term_vol
 
 
-class BacktestInfo:
-    def __init__(self):
-        self.equity_array = []
-        self.price_array = []
-        self.upper_trade_treshold = 0
-        self.lower_trade_treshold = 0
-        self.volatility_ratio_array = []
-
-    @staticmethod
-    def from_dict(data):
-        obj = BacktestInfo()
-        obj.equity_array = data.get("equity_array", [])
-        obj.price_array = data.get("price_array", [])
-        obj.upper_trade_treshold = data.get("upper_trade_treshold", 0)
-        obj.lower_trade_treshold = data.get("lower_trade_treshold", 0)
-        obj.volatility_ratio_array = data.get("volatility_ratio_array", [])
-        return obj
-
 def hollow_backtest_period(in_data, long_term_window: int, short_term_window: int, upper_trade_treshold: float, lower_trade_treshold: float, plot: bool = False):
     open_short = False
     open_long = False
@@ -220,6 +202,7 @@ def load_config(config_path: str):
     BEST_TRIALS_FILE = f"{CONFIG['instrument_id']}_{CONFIG['timeframe']}_best_trials.json"
 
 def optimize_parameters():
+    reload_config()
     global CONFIG
     backtest_infos = []
     n_trials = CONFIG["optimization"]["n_trials"]
@@ -285,15 +268,6 @@ def optimize_parameters():
         print(i.values)
         print("--------------------------------")
 
-def plot_best_trials():
-    with open(BEST_TRIALS_FILE, "r") as f:
-        best_trials_data = json.load(f)
-
-    for trial in best_trials_data:
-        print(trial['params'])
-        print("--------------------------------")
-        backtest_infos = [BacktestInfo.from_dict(i) for i in trial['backtest_infos']]
-        plot_backtest_info(backtest_infos, cli=CONFIG["cli_plot"])
 
 def simple_test_launch():
     global CONFIG
@@ -360,6 +334,7 @@ IS_SHORT_OPENED = False
 def real_time_trade_step():
     global IS_LONG_OPENED
     global IS_SHORT_OPENED
+    reload_config()
     volatility_ratio, price = calculate_current_volatility_ratio()
     instrument_id = f"{CONFIG["instrument_id"]}-SWAP"
     
@@ -421,6 +396,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Volatility trade script")
     parser.add_argument("-c", "--config", type=str, default="volatility_config.json", help="Path to JSON config file")
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode")
+    parser.add_argument("-o", "--optimize", action="store_true", help="Optimize parameters")
     args = parser.parse_args()
 
     load_config(args.config)
@@ -430,6 +406,10 @@ if __name__ == "__main__":
 
     if not os.path.exists("data"):
         os.makedirs("data")
+
+    if args.optimize:
+        optimize_parameters()
+        exit()
 
     if args.debug:
         simple_test_launch()

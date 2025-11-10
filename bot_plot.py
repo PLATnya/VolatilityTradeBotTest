@@ -8,7 +8,7 @@ import json
 CONFIG_PATH = ""
 CONFIG = None
 REALTIME_DATA_FILE = ""
-
+BEST_TRIALS_FILE = ""
 def reload_config():
     global CONFIG_PATH
     load_config(CONFIG_PATH)
@@ -23,6 +23,26 @@ def load_config(config_path: str):
     global REALTIME_DATA_FILE
     REALTIME_DATA_FILE = f"data/{CONFIG['instrument_id']}_{CONFIG['timeframe']}_realtime_data.npy"
 
+    global BEST_TRIALS_FILE
+    BEST_TRIALS_FILE = f"{CONFIG['instrument_id']}_{CONFIG['timeframe']}_best_trials.json"
+
+class BacktestInfo:
+    def __init__(self):
+        self.equity_array = []
+        self.price_array = []
+        self.upper_trade_treshold = 0
+        self.lower_trade_treshold = 0
+        self.volatility_ratio_array = []
+
+    @staticmethod
+    def from_dict(data):
+        obj = BacktestInfo()
+        obj.equity_array = data.get("equity_array", [])
+        obj.price_array = data.get("price_array", [])
+        obj.upper_trade_treshold = data.get("upper_trade_treshold", 0)
+        obj.lower_trade_treshold = data.get("lower_trade_treshold", 0)
+        obj.volatility_ratio_array = data.get("volatility_ratio_array", [])
+        return obj
 
 
 def plot_backtest_info_cli(backtest_infos):
@@ -223,20 +243,34 @@ def plot_realtime_data(cli = False):
         plot_realtime_data_ui()
 
 
+def plot_best_trials():
+    with open(BEST_TRIALS_FILE, "r") as f:
+        best_trials_data = json.load(f)
+
+    for trial in best_trials_data:
+        print(trial['params'])
+        print("--------------------------------")
+        backtest_infos = [BacktestInfo.from_dict(i) for i in trial['backtest_infos']]
+        plot_backtest_info(backtest_infos, cli=CONFIG["cli_plot"])
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Bot plot script")
     parser.add_argument("-c", "--config", type=str, default="volatility_config.json", help="Path to JSON config file")
     parser.add_argument("-r", "--realtime", action="store_true", help="Realtime data")
-
+    parser.add_argument("-b", "--best-trials", action="store_true", help="Best trials")
     parser.add_argument("-e", "--equity", action="store_true", help="Realtime data")
     args = parser.parse_args()
 
     load_config(args.config)
 
-
+    if args.best_trials:
+        plot_best_trials()
+        
     if args.realtime:
         plot_realtime_data(CONFIG["cli_plot"])
+
     if args.equity:
         plot_equity_data(CONFIG["cli_plot"])
