@@ -1,14 +1,15 @@
 import pandas as pd
 import requests
 import numpy as np
-import matplotlib.pyplot as plt
 from okx_trade import OkxClient
+import plotext as plt
 from dotenv import load_dotenv
 import os
 import time
 import optuna
 import json
 from datetime import datetime, timedelta, timezone
+from bot_plot import plot_backtest_info
 
 load_dotenv()
 
@@ -18,8 +19,12 @@ API_PASSPHRASE = os.getenv("OKX_API_PASSPHRASE")
 
 OKX = OkxClient.from_env()
 
-
+CONFIG_PATH = ""
 CONFIG = None
+
+REALTIME_DATA_FILE = ""
+BEST_TRIALS_FILE = ""
+
 def convert_time_to_ms(time: str) -> str:
     # Convert "ddmmyyyy_ssmmhh" to ms timestamp
     # Example: '01052023_300412' -> 1 May 2023, 12:04:30
@@ -176,7 +181,7 @@ def hollow_backtest_period(in_data, long_term_window: int, short_term_window: in
     backtest_info.volatility_ratio_array = volatility_ratio_array
 
     if plot:
-        plot_backtest_info(backtest_info)
+        plot_backtest_info(backtest_info, cli=CONFIG["cli_plot"])
         
     changes = pd.Series(some_array).pct_change().replace([np.inf, -np.inf], np.nan).dropna()
     changes_mean = float('inf')
@@ -184,64 +189,11 @@ def hollow_backtest_period(in_data, long_term_window: int, short_term_window: in
         changes_mean = changes.unique().mean()
 
     return equity, changes_mean, backtest_info
-
-
-def plot_backtest_info(backtest_infos):
-    """
-    Plot arrays of BacktestInfo instances in shared subplots.
-    Each BacktestInfo is displayed in its own column (subplot column).
-    """
-    n = len(backtest_infos)
-
-    fig, axs = plt.subplots(2, n, figsize=(6 * n, 8), squeeze=False)
-
-    colors = plt.cm.viridis(np.linspace(0, 1, n))
-    for idx, (backtest_info, color) in enumerate(zip(backtest_infos, colors)):
-        # Equity Curve - each in its own column
-        ax_eq = axs[0, idx]
-        ax_eq.plot(backtest_info.equity_array, color=color)
-        ax_eq.set_title(f"Equity Curve {idx+1}")
-
-        # Volatility Ratio - each in its own column
-        ax_vr = axs[1, idx]
-        ax_vr.plot(backtest_info.volatility_ratio_array, color=color, label='Volatility Ratio')
-
-        # Map close prices to [0, 1] for the same plot
-        close_prices_plot = backtest_info.price_array
-        cp_min = np.min(close_prices_plot)
-        cp_max = np.max(close_prices_plot)
-        if cp_max != cp_min:
-            close_prices_norm = (close_prices_plot - cp_min) / (cp_max - cp_min)
-        else:
-            close_prices_norm = np.zeros_like(close_prices_plot)
-
-        vrr = np.array(backtest_info.volatility_ratio_array)
-        vrr_min = vrr.min()
-        vrr_max = vrr.max()
-        if vrr_max != vrr_min:
-            mapped_close = close_prices_norm * (vrr_max - vrr_min) + vrr_min
-        else:
-            mapped_close = close_prices_norm + vrr_min
-
-        ax_vr.plot(mapped_close, color=color, linestyle="dashed", alpha=0.5, label="Close Price (mapped)")
-
-        # Add reference lines
-        ax_vr.axhline(y=backtest_info.upper_trade_treshold, color='r', linestyle='--', label=f'upper_trade_treshold ({backtest_info.upper_trade_treshold})')
-        ax_vr.axhline(y=backtest_info.lower_trade_treshold, color='g', linestyle='--', label=f'lower_trade_treshold ({backtest_info.lower_trade_treshold})')
-
-        # Legends
-        ax_eq.legend([f'Equity'])
-        ax_vr.legend()
-
-    plt.tight_layout()
-    plt.show()
-
     
 def calculate_current_volatility_ratio():
     global CONFIG
     candles = load_candles(interval=CONFIG['timeframe'], limit=CONFIG['real_time_trade']['long_term_window'] + 1, symbol=CONFIG['instrument_id'])
     return calculate_volatility_ratio(candles, CONFIG['real_time_trade']['long_term_window'], CONFIG['real_time_trade']['short_term_window']).iloc[-1], candles['close'].iloc[-1]
-
 
 
 def get_days_ago_str(days: int):
@@ -250,11 +202,22 @@ def get_days_ago_str(days: int):
     one_month_ago = now - timedelta(days=days)
     return one_month_ago.strftime("%d%m%Y_%H%M%S")
 
+def reload_config():
+    global CONFIG_PATH
+    load_config(CONFIG_PATH)
 
 def load_config(config_path: str):
+    global CONFIG_PATH
+    CONFIG_PATH = config_path
     global CONFIG
     with open(config_path, "r") as f:
         CONFIG = json.load(f)
+
+    global REALTIME_DATA_FILE
+    REALTIME_DATA_FILE = f"data/{CONFIG['instrument_id']}_{CONFIG['timeframe']}_realtime_data.npy"
+
+    global BEST_TRIALS_FILE
+    BEST_TRIALS_FILE = f"{CONFIG['instrument_id']}_{CONFIG['timeframe']}_best_trials.json"
 
 def optimize_parameters():
     global CONFIG
@@ -312,7 +275,7 @@ def optimize_parameters():
 
         best_trials_data.append(trial_dict)
 
-    with open(f"{CONFIG['instrument_id']}_{CONFIG['timeframe']}_best_trials.json", "w") as f:
+    with open(BEST_TRIALS_FILE, "w") as f:
         json.dump(best_trials_data, f, indent=4)
 
     print("")
@@ -322,23 +285,19 @@ def optimize_parameters():
         print(i.values)
         print("--------------------------------")
 
-def plot_best_trials(best_trials_file: str):
-    with open(best_trials_file, "r") as f:
+def plot_best_trials():
+    with open(BEST_TRIALS_FILE, "r") as f:
         best_trials_data = json.load(f)
 
     for trial in best_trials_data:
         print(trial['params'])
         print("--------------------------------")
         backtest_infos = [BacktestInfo.from_dict(i) for i in trial['backtest_infos']]
-        plot_backtest_info(backtest_infos)
+        plot_backtest_info(backtest_infos, cli=CONFIG["cli_plot"])
 
 def simple_test_launch():
     global CONFIG
-    print(CONFIG)
-    #long_term_window = int(CONFIG["long_term_window_range"][0] +(CONFIG["long_term_window_range"][1] - CONFIG["long_term_window_range"][0])/2) 
-    #short_term_window = int(CONFIG["short_term_window_range"][0] +(CONFIG["short_term_window_range"][1] - CONFIG["short_term_window_range"][0])/2)
-    #upper_trade_treshold = float(CONFIG["upper_trade_treshold_range"][0] +(CONFIG["upper_trade_treshold_range"][1] - CONFIG["upper_trade_treshold_range"][0])/2)
-    #lower_trade_treshold = float(CONFIG["lower_trade_treshold_range"][0] +(CONFIG["lower_trade_treshold_range"][1] - CONFIG["lower_trade_treshold_range"][0])/2)
+    reload_config()
     long_term_window = CONFIG["real_time_trade"]["long_term_window"]
     short_term_window = CONFIG["real_time_trade"]["short_term_window"]
     lower_trade_treshold = CONFIG["real_time_trade"]["lower_trade_treshold"]
@@ -362,24 +321,75 @@ def simple_test_launch():
         lower_trade_treshold=lower_trade_treshold,
         plot=False
     )
-    #print(equity, changes_mean)
-    plot_backtest_info([backtest_info, backtest_info2])
+
+    plot_backtest_info([backtest_info, backtest_info2], cli=CONFIG["cli_plot"])
 
 
 def get_order_size():
     global CONFIG
     return CONFIG["real_time_trade"]["order_size"]/float(OKX.get_ticker(f"{CONFIG["instrument_id"]}-SWAP")['last'])
 
-def write_realtime_data(volatility_ratio: float, price:float, order_direction: int = 0):
+def write_realtime_data(volatility_ratio: float, price:float, order_direction: int = 0, equity: float = None):
     print(f"writing realtime data: {volatility_ratio}, {price}, {order_direction}")
     global CONFIG
-    file_name = f"data/volatility/{CONFIG['instrument_id']}_{CONFIG['timeframe']}_realtime_data.npy"
+    file_name = f"data/{CONFIG['instrument_id']}_{CONFIG['timeframe']}_realtime_data.npy"
     if not os.path.exists(file_name):
-        np.save(file_name, np.array([[volatility_ratio, price, order_direction]], dtype=np.float64))
+        if not equity:
+            equity = 0 
+        np.save(file_name, np.array([[volatility_ratio, price, order_direction, equity]], dtype=np.float64))
     else:
         data = np.load(file_name)
-        data = np.vstack([data, np.array([[volatility_ratio, price, order_direction]])])
+        if not equity:
+            equity = data[-1, 3]
+        data = np.vstack([data, np.array([[volatility_ratio, price, order_direction, equity]])])
         np.save(file_name, data)
+
+def fetch_equity():
+    """Fetch current equity from OKX."""
+    try:
+        balance = OKX.get_balance()
+        total_eq = float(balance.get('totalEq', 0))
+        return total_eq
+    except Exception as e:
+        print(f"Error fetching equity: {e}")
+        return None
+
+IS_LONG_OPENED = False
+IS_SHORT_OPENED = False
+
+def real_time_trade_step():
+    global IS_LONG_OPENED
+    global IS_SHORT_OPENED
+    volatility_ratio, price = calculate_current_volatility_ratio()
+    instrument_id = f"{CONFIG["instrument_id"]}-SWAP"
+    
+    order_direction = 0
+    if volatility_ratio > CONFIG["real_time_trade"]["upper_trade_treshold"] and not IS_SHORT_OPENED:
+        print("open short")
+
+        if IS_LONG_OPENED:
+            OKX.close_position(inst_id=instrument_id, mgn_mode="cross", pos_side="long", auto_cxl=True)
+            IS_LONG_OPENED = False
+
+        order_size = get_order_size()
+        OKX.place_order(instrument_id, "cross", "sell", "market", f"{order_size:.2f}", position_side="short")
+        IS_SHORT_OPENED = True
+        order_direction = -1
+
+    elif volatility_ratio < CONFIG["real_time_trade"]["lower_trade_treshold"] and not IS_LONG_OPENED:
+        print("open long")
+
+        if IS_SHORT_OPENED:
+            OKX.close_position(inst_id=instrument_id, mgn_mode="cross", pos_side="short", auto_cxl=True)
+            IS_SHORT_OPENED = False
+            
+        order_size = get_order_size()
+        OKX.place_order(instrument_id, "cross", "buy", "market", f"{order_size:.2f}", position_side="long")
+        IS_LONG_OPENED = True
+        order_direction = 1
+
+    equity = fetch_equity()
+    write_realtime_data(volatility_ratio, price, order_direction, equity)
 
 def real_time_trade():
     """
@@ -389,39 +399,21 @@ def real_time_trade():
     global CONFIG
     n = CONFIG["real_time_trade"]["delay_sec"]
 
-    is_long_opened = False
-    is_short_opened = False
     while True:
         start_time = time.time()
-        volatility_ratio, price = calculate_current_volatility_ratio()
-        instrument_id = f"{CONFIG["instrument_id"]}-SWAP"
-        write_realtime_data(volatility_ratio, price, 0)
-        if volatility_ratio > CONFIG["real_time_trade"]["upper_trade_treshold"] and not is_short_opened:
-            print("open long")
-
-            if is_long_opened:
-                OKX.close_position(inst_id=instrument_id, mgn_mode="cross", pos_side="long", auto_cxl=True)
-                is_long_opened = False
-
-            order_size = get_order_size()
-            OKX.place_order(instrument_id, "cross", "sell", "market", f"{order_size:.2f}", position_side="short")
-            is_short_opened = True
-
-        elif volatility_ratio < CONFIG["real_time_trade"]["lower_trade_treshold"] and not is_long_opened:
-            print("open short")
-
-            if is_short_opened:
-                OKX.close_position(inst_id=instrument_id, mgn_mode="cross", pos_side="short", auto_cxl=True)
-                is_short_opened = False
-                
-            order_size = get_order_size()
-            OKX.place_order(instrument_id, "cross", "buy", "market", f"{order_size:.2f}", position_side="long")
-            is_long_opened = True
+        real_time_trade_step()
 
         elapsed = time.time() - start_time
         to_sleep = max(0, n - elapsed)
-        time.sleep(to_sleep)
-
+        
+        sleep_time = to_sleep
+        while True:
+            mins, secs = divmod(int(sleep_time), 60)
+            print(f"Sleeping for {mins} minutes and {secs} seconds...")
+            time.sleep(1)
+            sleep_time -= 1
+            if sleep_time <= 0:
+                break
 
 if __name__ == "__main__":
     import argparse
@@ -431,14 +423,14 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode")
     args = parser.parse_args()
 
-    config_path = args.config
-    load_config(config_path)
+    load_config(args.config)
 
     print(CONFIG["instrument_id"])
     print(CONFIG["timeframe"])
 
-    #simple_test_launch()
-    #plot_best_trials(f"{CONFIG['instrument_id']}_{CONFIG['timeframe']}_best_trials.json")
+    if not os.path.exists("data"):
+        os.makedirs("data")
+
     if args.debug:
         simple_test_launch()
     else:

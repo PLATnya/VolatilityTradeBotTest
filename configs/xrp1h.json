@@ -1,0 +1,21 @@
+{
+    "long_term_window_range": [10, 20, 1],
+    "short_term_window_range": [2, 10, 1],
+    "upper_trade_treshold_range": [1.0, 2.0, 0.1],
+    "lower_trade_treshold_range": [0.1, 0.9, 0.1],
+    "instrument_id": "XRP-USDT",
+    "timeframe": "1h",
+    "optimization":{
+        "days_list": [30,90],
+        "n_trials": 350
+    },
+    "real_time_trade": {
+        "delay_sec": 3600,
+        "long_term_window": 13,
+        "short_term_window": 8,
+        "upper_trade_treshold": 1.2,
+        "lower_trade_treshold": 0.6,
+        "order_size": 12000
+    }
+    
+}
