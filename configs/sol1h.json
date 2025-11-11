@@ -7,7 +7,7 @@
     "timeframe": "1h",
     "optimization":{
         "days_list": [30,90],
-        "n_trials": 350
+        "n_trials": 500
     },
     "real_time_trade": {
         "delay_sec": 3600,
@@ -15,6 +15,7 @@
         "short_term_window": 4,
         "upper_trade_treshold": 1.8,
         "lower_trade_treshold": 0.3,
-        "order_size": 12000
-    }
+        "order_size": 10000
+    },
+    "cli_plot": false
 }

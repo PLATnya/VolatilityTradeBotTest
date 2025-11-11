@@ -272,6 +272,74 @@ def optimize_parameters():
         print(i.values)
         print("--------------------------------")
 
+def optimize_parameters_only_equity():
+    reload_config()
+    global CONFIG
+    backtest_infos = []
+    n_trials = CONFIG["optimization"]["n_trials"]
+    days_list = CONFIG["optimization"]["days_list"]
+    def objective(trial):
+        global CONFIG
+        """Optimize only long_term_window_trade and short_term_window_trade."""
+        long_term_window_range = CONFIG["long_term_window_range"]
+        short_term_window_range = CONFIG["short_term_window_range"]
+        upper_trade_treshold_range = CONFIG["upper_trade_treshold_range"]
+        lower_trade_treshold_range = CONFIG["lower_trade_treshold_range"]
+
+        upper_trade_treshold = trial.suggest_float('upper_trade_treshold', upper_trade_treshold_range[0], upper_trade_treshold_range[1], step=upper_trade_treshold_range[2])
+        lower_trade_treshold = trial.suggest_float('lower_trade_treshold', lower_trade_treshold_range[0], lower_trade_treshold_range[1], step=lower_trade_treshold_range[2])
+        long_term_window = trial.suggest_int('long_term_window' , long_term_window_range[0], long_term_window_range[1], step=long_term_window_range[2])
+        short_term_window = trial.suggest_int('short_term_window', short_term_window_range[0], short_term_window_range[1], step=short_term_window_range[2])
+
+        # Use fixed values for other parameters
+        backtest_infos.append([])
+        equity_list = []
+        changes_mean_list = []
+        for days in days_list:
+            in_data = load_candles_all(interval=CONFIG['timeframe'], start_time=get_days_ago_str(days), symbol=CONFIG['instrument_id'])
+            equity, changes_mean, backtest_info = hollow_backtest_period(
+                in_data, 
+                long_term_window=long_term_window,  # Fixed
+                short_term_window=short_term_window,  # Fixed
+                upper_trade_treshold=upper_trade_treshold,
+                lower_trade_treshold=lower_trade_treshold,
+                plot=False
+            )
+            backtest_infos[-1].append(backtest_info)
+            equity_list.append(equity)
+            changes_mean_list.append(changes_mean)
+        return equity_list
+
+    study = optuna.create_study(directions=['maximize',] * len(days_list))
+    study.optimize(objective, n_trials=n_trials)
+    
+    best_trials_data = []
+    for trial in study.best_trials:
+        trial_dict = {
+            "params": trial.params,
+            "values": trial.values,
+            "backtest_infos": [{
+                "equity_array": list(backtest_info.equity_array),
+                "price_array": list(backtest_info.price_array),
+                "upper_trade_treshold": backtest_info.upper_trade_treshold,
+                "lower_trade_treshold": backtest_info.lower_trade_treshold,
+                "volatility_ratio_array": list(backtest_info.volatility_ratio_array),
+                "long_term_window": backtest_info.long_term_window,
+                "short_term_window": backtest_info.short_term_window,
+            } for backtest_info in backtest_infos[trial.number]]
+        }
+
+        best_trials_data.append(trial_dict)
+
+    with open(BEST_TRIALS_FILE, "w") as f:
+        json.dump(best_trials_data, f, indent=4)
+
+    print("")
+    print("--------------------------------")
+    for i in study.best_trials:
+        print(i.params)
+        print(i.values)
+        print("--------------------------------")
 
 def simple_test_launch():
     global CONFIG
@@ -401,6 +469,8 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--config", type=str, default="volatility_config.json", help="Path to JSON config file")
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode")
     parser.add_argument("-o", "--optimize", action="store_true", help="Optimize parameters")
+    parser.add_argument("-oe", "--optimize-only-equity", action="store_true", help="Optimize parameters only equity")
+
     args = parser.parse_args()
 
     load_config(args.config)
@@ -413,6 +483,10 @@ if __name__ == "__main__":
 
     if args.optimize:
         optimize_parameters()
+        exit()
+
+    if args.optimize_only_equity:
+        optimize_parameters_only_equity()
         exit()
 
     if args.debug:

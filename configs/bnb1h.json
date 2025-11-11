@@ -6,17 +6,16 @@
     "instrument_id": "BNB-USDT",
     "timeframe": "1h",
     "optimization":{
-        "days_list": [90,180],
-        "n_trials": 350
+        "days_list": [30,90],
+        "n_trials": 500
     },
     "real_time_trade": {
         "delay_sec": 3600,
-        "long_term_window": 15,
-        "short_term_window": 3,
-        "upper_trade_treshold": 2.0,
+        "long_term_window": 13,
+        "short_term_window": 5,
+        "upper_trade_treshold": 1.6,
         "lower_trade_treshold": 0.3,
-        "order_size": 12000
+        "order_size": 10000
     },
     "cli_plot": false
-    
 }
