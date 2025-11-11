@@ -17,5 +17,5 @@
         "lower_trade_treshold": 0.3,
         "order_size": 10000
     },
-    "cli_plot": false
+    "cli_plot": true
 }
