@@ -86,6 +86,7 @@ class OkxClient:
             raise
 
         if payload.get("code") != "0":
+            print(payload)
             code = payload.get("code")
             msg = payload.get("msg")
             raise RuntimeError(f"OKX API error code={code} msg={msg}")

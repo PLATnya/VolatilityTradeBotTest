@@ -419,6 +419,7 @@ def real_time_trade_step():
             IS_LONG_OPENED = False
 
         order_size = get_order_size()
+        print(f"order size: {order_size}")
         OKX.place_order(instrument_id, "cross", "sell", "market", f"{order_size:.2f}", position_side="short")
         IS_SHORT_OPENED = True
         order_direction = -1
@@ -431,6 +432,7 @@ def real_time_trade_step():
             IS_SHORT_OPENED = False
             
         order_size = get_order_size()
+        print(f"order size: {order_size}")
         OKX.place_order(instrument_id, "cross", "buy", "market", f"{order_size:.2f}", position_side="long")
         IS_LONG_OPENED = True
         order_direction = 1
