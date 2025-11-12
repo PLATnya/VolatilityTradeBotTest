@@ -403,6 +403,52 @@ def fetch_equity():
 IS_LONG_OPENED = False
 IS_SHORT_OPENED = False
 
+TRADE_ATTEMPTS = 5
+def open_long(instrument_id: str):
+    order_size = get_order_size()
+    print("open long, order size: ", order_size)
+    for i in range(TRADE_ATTEMPTS):
+        try:
+            OKX.place_order(instrument_id, "cross", "buy", "market", f"{order_size:.2f}", position_side="long")
+        except Exception as e:
+            print(f"Error opening long: {e}")
+            time.sleep(1)
+            continue
+        break
+def open_short(instrument_id: str):
+    order_size = get_order_size()
+    print("open short, order size: ", order_size)
+    for i in range(TRADE_ATTEMPTS):
+        try:
+            OKX.place_order(instrument_id, "cross", "sell", "market", f"{order_size:.2f}", position_side="short")
+        except Exception as e:
+            print(f"Error opening short: {e}")
+            time.sleep(1)
+            continue
+        break
+
+def close_long(instrument_id: str):
+    print("close long")
+    for i in range(TRADE_ATTEMPTS):
+        try:
+            OKX.close_position(inst_id=instrument_id, mgn_mode="cross", pos_side="long", auto_cxl=True)
+        except Exception as e:
+            print(f"Error closing long: {e}")
+            time.sleep(1)
+            continue
+        break
+
+def close_short(instrument_id: str):
+    print("close short")
+    for i in range(TRADE_ATTEMPTS):
+        try:
+            OKX.close_position(inst_id=instrument_id, mgn_mode="cross", pos_side="short", auto_cxl=True)
+        except Exception as e:
+            print(f"Error closing short: {e}")
+            time.sleep(1)
+            continue
+        break
+
 def real_time_trade_step():
     global IS_LONG_OPENED
     global IS_SHORT_OPENED
@@ -412,28 +458,20 @@ def real_time_trade_step():
     
     order_direction = 0
     if volatility_ratio > CONFIG["real_time_trade"]["upper_trade_treshold"] and not IS_SHORT_OPENED:
-        print("open short")
-
         if IS_LONG_OPENED:
-            OKX.close_position(inst_id=instrument_id, mgn_mode="cross", pos_side="long", auto_cxl=True)
+            close_long(instrument_id)
             IS_LONG_OPENED = False
 
-        order_size = get_order_size()
-        print(f"order size: {order_size}")
-        OKX.place_order(instrument_id, "cross", "sell", "market", f"{order_size:.2f}", position_side="short")
+        open_short(instrument_id)
         IS_SHORT_OPENED = True
         order_direction = -1
 
     elif volatility_ratio < CONFIG["real_time_trade"]["lower_trade_treshold"] and not IS_LONG_OPENED:
-        print("open long")
-
         if IS_SHORT_OPENED:
-            OKX.close_position(inst_id=instrument_id, mgn_mode="cross", pos_side="short", auto_cxl=True)
+            close_short(instrument_id)
             IS_SHORT_OPENED = False
             
-        order_size = get_order_size()
-        print(f"order size: {order_size}")
-        OKX.place_order(instrument_id, "cross", "buy", "market", f"{order_size:.2f}", position_side="long")
+        open_long(instrument_id)
         IS_LONG_OPENED = True
         order_direction = 1
 
