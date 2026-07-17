@@ -124,7 +124,15 @@ def hollow_backtest_period(in_data, long_term_window: int, short_term_window: in
     equity = 0
     some_array = [0]
     volatility_ratio_array = []
-    for i in range(long_term_window + 1, len(in_data)):
+
+    global CONFIG
+    treshold_window = CONFIG["real_time_trade"]["treshold_window"]
+    print(f"treshold window: {treshold_window}")
+
+    treshold_window_upper_array = []
+    treshold_window_lower_array = []
+
+    for i in range(max(long_term_window + 1, treshold_window + 1), len(in_data)):
         df = in_data.iloc[i-(long_term_window + 1):i]
 
         volatility_ratio = calculate_volatility_ratio(df, long_term_window, short_term_window)
@@ -133,27 +141,44 @@ def hollow_backtest_period(in_data, long_term_window: int, short_term_window: in
         price = df['close'].iloc[-1]
 
         profit = 0
-        if volatility_ratio.iloc[-1] > upper_trade_treshold and not open_short:
-            open_long = False
-            open_short = True
-            #print("open short")
-            if last_price != 0:
-                profit = price/last_price - 1 - 0.001
-                #print(f"profit: {profit}")
-            last_price = price
-            #print(f"Volatility ratio: {volatility_ratio} at {df.index[-1]}")
-        if volatility_ratio.iloc[-1] < lower_trade_treshold and not open_long:
-            open_long = True
-            open_short = False
-            #print("open long")
-            if last_price != 0:
-                profit = last_price/price - 1- 0.001
-                #print(f"profit: {profit}")
-            last_price = price
+
+        if len(volatility_ratio_array) > treshold_window + 2:
+
+            #volatility_ratio.iloc[-1] > upper_trade_treshold and not open_short
+            #volatility_ratio.iloc[-1] < lower_trade_treshold and not open_long
+
+            max_ratio = volatility_ratio_array[-2]
+            min_ratio = volatility_ratio_array[-2]
+            for i in range(treshold_window):
+                if volatility_ratio_array[-(2+i)] > max_ratio:
+                    max_ratio = volatility_ratio_array[-(2+i)]
+                if volatility_ratio_array[-(2+i)] < min_ratio:
+                    min_ratio = volatility_ratio_array[-(2+i)]
+
+            print(f"max ratio: {max_ratio}, min ratio: {min_ratio} ratio: {volatility_ratio.iloc[-1]}")
+            upper_condition = volatility_ratio.iloc[-1] > max_ratio and (not open_short)
+            lower_condition = volatility_ratio.iloc[-1] < min_ratio and (not open_long)
+
+            #treshold_window_upper_array.append(volatility_ratio.rolling(treshold_window).max().iloc[-1])
+            #treshold_window_lower_array.append(volatility_ratio.rolling(treshold_window).min().iloc[-1])
+
+            if upper_condition:
+                open_long = False
+                open_short = True
+                print(f"open short at {df.index[-1]}")
+                if last_price != 0:
+                    profit = price/last_price - 1 - 0.001
+                last_price = price
+
+            if lower_condition:
+                open_long = True
+                open_short = False
+                if last_price != 0:
+                    profit = last_price/price - 1- 0.001
+                last_price = price
 
         equity += profit
         some_array.append(equity)
-
 
     backtest_info = BacktestInfo()
     backtest_info.long_term_window = long_term_window
